@@ -39,31 +39,33 @@ export const BUILTIN_AD_KEYWORDS: readonly string[] = [
 /**
  * High-signal keywords that are almost never used in benign conversation.
  *
- * The general keyword list (the config/ad.json base + the remote `[keywords]`
- * section) contains many generic words (`客服`, `咨询`, `联系`, `考试`, `QQ`, …)
- * that appear constantly in normal group chat, so counting them alone over-flags.
- * The detector therefore only flags a message when it also contains at least one
- * *strong* keyword (config base + the remote `[strong]` section). Generic words on
- * their own never flag — they only reinforce a strong signal.
+ * These are the words that constitute the ad's *pitch* — what is being
+ * promoted: promo/deal words (秒杀, 包邮, 免费送), money/loan hooks (贷款, 刷单),
+ * education-scam promises (押题, 保过), urgency pushes (仅剩, 先到先得), job
+ * hooks (日结, 高薪), gambling/gaming (棋牌, 博彩), health/scam (丰胸, 壮阳).
+ *
+ * Contact-method words (加V, 私聊, 扫码, 群号, 微信…) deliberately do NOT belong
+ * here: "加我私聊" alone is a normal private-chat invitation, not an ad. They
+ * live in the general keyword list and only *reinforce* a real promo signal.
+ * The detector only flags a message when it contains at least one *strong*
+ * keyword (the pitch) or a suspicious URL; generic words — contact or otherwise
+ * — never decide on their own.
  *
  * This list is deliberately conservative: too generous and the false positives
- * come back. Prefer moving specific terms to the remote `[strong]` section.
+ * come back. Prefer moving specific promo terms to the remote `[strong]`
+ * section.
  */
 export const BUILTIN_STRONG_AD_KEYWORDS: readonly string[] = [
-  // Contact methods (rare outside an ad)
-  '加V', '加我', '私聊', '私发', '扫码', '群号', '入群', '热线',
-  // Shopping / promotions
-  '秒杀', '团购', '代购', '包邮', '免费送', '优惠券', '返利', '半价', '一折', '二折', '甩卖', '特价', '抢购',
+  // Shopping / promotions (the hook)
+  '秒杀', '代购', '包邮', '免费送', '返利', '半价', '一折', '二折', '甩卖', '特价', '抢购',
   // Money / loans
   '贷款', '放贷', '提现', '刷单',
   // Education scams
   '押题', '保过', '保录', '包过', '提分', '特训',
   // Jobs
   '日结', '高薪',
-  // Urgency pushes
-  '仅剩', '速来', '先到先得', '名额有限', '机不可失',
   // Gaming / gambling
-  '棋牌', '博彩', '赌博', '充值', '代练', '陪玩', '代打',
+  '棋牌', '博彩', '赌博', '代练', '陪玩', '代打',
   // Health / beauty (the surgical/anabolic ones)
   '丰胸', '祛斑', '壮阳', '增高', '延时',
 ]

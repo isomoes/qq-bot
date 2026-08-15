@@ -28,12 +28,21 @@ describe('extractUrls', () => {
     assert.ok(urls.includes('example.com'))
   })
 
-  it('extracts bare domains adjacent to Chinese text', () => {
-    assert.deepEqual(extractUrls('点击evil.xyz或访问www.evil.top'), ['evil.xyz', 'www.evil.top'])
+it('extracts bare domains embedded directly in CJK text', () => {
+    // Chinese ads paste domains straight after 汉字 with no space: 来de98.top.
+    const urls = extractUrls('优惠大促销,来de98.top中转站优惠')
+    assert.ok(urls.includes('de98.top'), `expected de98.top in ${JSON.stringify(urls)}`)
+    assert.ok(extractUrls('欢迎访问evil-shop.xyz别错过').includes('evil-shop.xyz'))
+    assert.ok(extractUrls('加我微信abc123.com等你').includes('abc123.com'))
   })
 
   it('does not treat plain words as URLs', () => {
     assert.deepEqual(extractUrls('今天天气不错 聊聊呗'), [])
+  })
+
+  it('does not extract the domain of an email address', () => {
+    const urls = extractUrls('投简历请发 hr@ai-company.com 随时联系')
+    assert.ok(!urls.includes('ai-company.com'), `email domain leaked: ${JSON.stringify(urls)}`)
   })
 })
 

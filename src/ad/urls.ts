@@ -25,6 +25,13 @@ export const DEFAULT_SAFE_URL_DOMAINS: readonly string[] = [
   'meituan.com', 'dianping.com', 'ele.me', '12306.cn', 'amap.com',
   // Official / education
   'gov.cn', 'edu.cn', 'wikipedia.org',
+  // Dev / AI platforms a tech group legitimately shares
+  'huggingface.co', 'kaggle.com', 'arxiv.org', 'notion.so', 'autodl.com',
+  'volcengine.com', 'bytedance.com', 'aliyun.com', 'huaweicloud.com', 'qcloud.com',
+  'openai.com', 'anthropic.com', 'deepseek.com', 'linux.do', 't.cn',
+  'gitlab.com', 'stackoverflow.com', 'csdn.net', 'juejin.cn', 'cnblogs.com',
+  'leetcode.com', 'nowcoder.com', 'vercel.com', 'npmjs.com', 'pypi.org',
+  'python.org', 'docker.com', 'kubernetes.io',
 ]
 
 /** Spam-prone top-level domains: cheap registrations disproportionately used
@@ -35,16 +42,22 @@ export const DEFAULT_SUSPICIOUS_TLDS: readonly string[] = [
   'top', 'xyz', 'icu', 'cc',
   'vip', 'club', 'site', 'info', 'online', 'shop', 'store', 'live',
   'pro', 'tech', 'fun', 'app', 'work', 'ltd', 'group', 'ink',
-  'me', 'co', 'biz', 'mobi', 'tv', 'wang', 'ren', 'red',
+  'me', 'biz', 'mobi', 'tv', 'wang', 'ren', 'red',
   'loan', 'bid', 'win', 'link', 'cloud', 'news', 'video', 'space',
   'world', 'plus', 'social', 'blog', 'design', 'games', 'media', 'network',
   'tk', 'ml', 'ga', 'cf', 'gq',
 ]
 
-/** Scheme'd URLs, e.g. https://example.com/path?q=1. */
+/** Scheme'd URLs, e.g. https://example.com/path?q=1. Trailing sentence
+ *  punctuation is stripped when the token is extracted. */
 const URL_RE = /https?:\/\/[^\s<>"'（）()，。！？；：、…）》【】〔〕「」『』“”‘’]+/gi
-/** Bare domains, e.g. www.example.com or example.com/abc (no scheme). */
-const BARE_HOST_RE = /(?<![a-z0-9@\/.-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,})(?::\d+)?/gi
+/** Bare domains, e.g. www.example.com or example.com/abc (no scheme). A host
+ *  is a label-dotted domain with an alphabetic TLD; it counts wherever it
+ *  starts — including directly after CJK text ("来de98.top" must match). We
+ *  only require that the char before is not itself a domain character (letter,
+ *  digit, dot, dash, @), so we don't match inside a longer host and don't grab
+ *  the domain of an email address. */
+const BARE_HOST_RE = /(?<![a-zA-Z0-9.\-@])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,})(?::\d+)?/gi
 const BARE_HOST_TOKEN_RE = /^((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,})(?::\d+)?/i
 /** Punctuation commonly attached to a URL at the end of a sentence. */
 const TRAILING_URL_PUNCTUATION_RE = /[.,!?;:，。！？；：、…）》】〕」』”’]+$/u
@@ -61,18 +74,25 @@ function hostOf(url: string): string {
 
 /**
  * Extract all URLs in `text` (scheme'd URLs and bare domains), lowercased.
+ * Scheme'd spans are masked out before the bare-host scan so the domain inside
+ * `https://example.com/x` isn't reported twice.
  */
 export function extractUrls(text: string): string[] {
   const out = new Set<string>()
+  const masked = text.split('')
   URL_RE.lastIndex = 0
   let m: RegExpExecArray | null
   while ((m = URL_RE.exec(text)) !== null) {
-    const url = m[0].replace(TRAILING_URL_PUNCTUATION_RE, '')
-    if (url) out.add(url.toLowerCase())
-    if (m[0].length === 0) URL_RE.lastIndex++
+    const url = m[0].replace(TRAILING_URL_PUNCTUATION_RE, '').toLowerCase()
+    if (url) out.add(url)
+    if (m[0].length === 0) {
+      URL_RE.lastIndex++
+      continue
+    }
+    for (let i = m.index; i < m.index + m[0].length; i++) masked[i] = ' '
   }
   BARE_HOST_RE.lastIndex = 0
-  while ((m = BARE_HOST_RE.exec(text)) !== null) {
+  while ((m = BARE_HOST_RE.exec(masked.join(''))) !== null) {
     out.add(m[1].toLowerCase())
   }
   return [...out]
@@ -107,21 +127,32 @@ export interface UrlScan {
   suspiciousTld: boolean
 }
 
+/** Per-URL ad-evidence classification (for the analysis/test tool). */
+export interface UrlEvidence {
+  /** The URL token found in the text (scheme'd URL or bare host). */
+  url: string
+  /** The extracted host, lowercased. */
+  host: string
+  /** True when the host is benign (a label suffix is on the safe whitelist). */
+  benign: boolean
+  /** True when the host is not benign and uses a spam-prone TLD. */
+  suspiciousTld: boolean
+}
+
 /**
- * Scan `text` for URL evidence: whether it carries a non-whitelisted URL, and
- * whether such a URL sits on a spam-prone TLD. A host is benign when any of
+ * Classify every URL in `text` for ad evidence. A host is benign when any of
  * its label suffixes (e.g. `jd.com` of `item.jd.com`, or `gov.cn` of
- * `www.gov.cn`) is on the safe list.
+ * `www.gov.cn`) is on the safe list; non-benign hosts on a spam-prone TLD are
+ * additionally marked.
  */
-export function scanUrls(
+export function classifyUrls(
   text: string,
   safeDomains: readonly string[],
   suspiciousTlds: readonly string[],
-): UrlScan {
+): UrlEvidence[] {
   const safe = new Set(safeDomains.map((d) => d.toLowerCase()))
   const tlds = new Set(suspiciousTlds.map((t) => t.toLowerCase().replace(/^\./, '')))
-  let suspiciousUrl = false
-  let suspiciousTld = false
+  const out: UrlEvidence[] = []
   for (const url of extractUrls(text)) {
     const host = hostOf(url)
     if (!host) continue
@@ -133,9 +164,26 @@ export function scanUrls(
         break
       }
     }
-    if (benign) continue
+    out.push({ url, host, benign, suspiciousTld: !benign && tlds.has(labels[labels.length - 1]) })
+  }
+  return out
+}
+
+/**
+ * Scan `text` for URL evidence: whether it carries a non-whitelisted URL, and
+ * whether such a URL sits on a spam-prone TLD.
+ */
+export function scanUrls(
+  text: string,
+  safeDomains: readonly string[],
+  suspiciousTlds: readonly string[],
+): UrlScan {
+  let suspiciousUrl = false
+  let suspiciousTld = false
+  for (const e of classifyUrls(text, safeDomains, suspiciousTlds)) {
+    if (e.benign) continue
     suspiciousUrl = true
-    if (tlds.has(labels[labels.length - 1])) suspiciousTld = true
+    if (e.suspiciousTld) suspiciousTld = true
   }
   return { suspiciousUrl, suspiciousTld }
 }

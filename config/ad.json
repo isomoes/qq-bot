@@ -7,17 +7,28 @@
   "lengthLr": 0.35,
   "chatLength": 10,
   "maxLengthLr": 0.5,
-  "shortKeywordFactor": 0.5,
+  "shortKeywordFactor": 0.3,
+  "shortRampPower": 2,
   "repeatDiminish": 0.7,
   "weakDiminish": 1.5,
   "suspiciousUrlLr": 8,
   "suspiciousTldLr": 2,
+  "contactLr": 4,
+  "codeLr": 30,
+  "priceLr": 10,
+  "registerLr": 6,
+  "serviceLr": 8,
+  "ctaLr": 5,
+  "pitchLr": 40,
+  "questionFactor": 0.55,
+  "replyFactor": 0.6,
+  "collabFactor": 0.7,
   "minKeywordHits": 2,
   "suspiciousTlds": [
     "top", "xyz", "icu", "cc",
     "vip", "club", "site", "info", "online", "shop", "store", "live",
     "pro", "tech", "fun", "app", "work", "ltd", "group", "ink",
-    "me", "co", "biz", "mobi", "tv", "wang", "ren", "red",
+    "me", "biz", "mobi", "tv", "wang", "ren", "red",
     "loan", "bid", "win", "link", "cloud", "news", "video", "space",
     "world", "plus", "social", "blog", "design", "games", "media", "network",
     "tk", "ml", "ga", "cf", "gq"
@@ -31,7 +42,13 @@
     "google.com", "google.cn", "youtube.com", "github.com", "gitee.com",
     "microsoft.com", "apple.com", "alipay.com", "paypal.com",
     "meituan.com", "dianping.com", "ele.me", "12306.cn", "amap.com",
-    "gov.cn", "edu.cn", "wikipedia.org"
+    "gov.cn", "edu.cn", "wikipedia.org",
+    "huggingface.co", "kaggle.com", "arxiv.org", "notion.so", "autodl.com",
+    "volcengine.com", "bytedance.com", "aliyun.com", "huaweicloud.com", "qcloud.com",
+    "openai.com", "anthropic.com", "deepseek.com", "linux.do", "t.cn",
+    "gitlab.com", "stackoverflow.com", "csdn.net", "juejin.cn", "cnblogs.com",
+    "leetcode.com", "nowcoder.com", "vercel.com", "npmjs.com", "pypi.org",
+    "python.org", "docker.com", "kubernetes.io"
   ],
   "keywordLrs": {
     "刷单": 100,
@@ -42,13 +59,11 @@
     "博彩": 120
   },
   "strongKeywords": [
-    "加V", "加我", "私聊", "私发", "扫码", "群号", "入群", "热线",
-    "秒杀", "团购", "代购", "包邮", "免费送", "优惠券", "返利", "半价", "一折", "二折", "甩卖", "特价", "抢购",
+    "秒杀", "代购", "包邮", "免费送", "返利", "半价", "一折", "二折", "甩卖", "特价", "抢购",
     "贷款", "放贷", "提现", "刷单",
     "押题", "保过", "保录", "包过", "提分", "特训",
     "日结", "高薪",
-    "仅剩", "速来", "先到先得", "名额有限", "机不可失",
-    "棋牌", "博彩", "赌博", "充值", "代练", "陪玩", "代打",
+    "棋牌", "博彩", "赌博", "代练", "陪玩", "代打",
     "丰胸", "祛斑", "壮阳", "增高", "延时"
   ],
   "keywords": [
@@ -68,18 +83,20 @@
     "日薪", "周薪", "月薪", "年薪", "提成", "佣金", "返利"
   ],
   "patterns": [
+    "/[0-9一二三四五六七八九十百]+[%％].*?折扣/",
+    "/还差\\d{1,2}人.{0,10}(拼团|团购|满减)/",
+    "/\\d+\\s*核\\s*\\d+\\s*[GgＧ].{0,10}?\\d+\\s*元\\s*\\/\\s*\\d+\\s*[年月]/",
+    "/(阿里云|腾讯云|京东云|华为云|百度云|天翼云|优刻得|轻量应用服务器|云服务器).{0,14}?\\d+\\s*元\\s*\\/\\s*\\d+\\s*[年月]/"
+  ],
+  "contactPatterns": [
     "/加[V微]信?[:：]?\\s*([a-zA-Z0-9_-]{4,20})/",
     "/微信[号码]?[:：]?\\s*([a-zA-Z0-9_-]{4,20})/",
     "/([Qq]{2}|扣扣)[:：]?\\s*([0-9]{5,11})/",
     "/电话[:：]?\\s*(1[3-9]\\d{9})/",
     "/([加关]注|扫码).{0,5}领.{0,5}(红包|优惠)/",
     "/[加关]我.{0,8}发你/",
-    "/[0-9一二三四五六七八九十百]+[%％].*?折扣/",
-    "/还差\\d{1,2}人.{0,10}(拼团|团购|满减)/",
     "/[找要]人.{0,5}一起.{0,5}(考研|调剂|保研)/",
     "/本人.{0,20}(专业|精通).{0,20}(辅导|指导)/",
-    "/(免费|赠送|折扣).{0,15}(咨询|了解|获取)/",
-    "/\\d+\\s*核\\s*\\d+\\s*[GgＧ].{0,10}?\\d+\\s*元\\s*\\/\\s*\\d+\\s*[年月]/",
-    "/(阿里云|腾讯云|京东云|华为云|百度云|天翼云|优刻得|轻量应用服务器|云服务器).{0,14}?\\d+\\s*元\\s*\\/\\s*\\d+\\s*[年月]/"
+    "/(免费|赠送|折扣).{0,15}(咨询|了解|获取)/"
   ]
 }

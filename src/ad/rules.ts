@@ -41,11 +41,13 @@ const base = getAdConfig()
 const baseKeywords: readonly string[] = base.keywords
 const baseStrongKeywords: readonly string[] = base.strongKeywords
 const basePatterns: readonly RegExp[] = base.patterns
+const baseContactPatterns: readonly RegExp[] = base.contactPatterns
 
 /** Active lists (config/ad.json ∪ last good remote). Swapped atomically on refresh. */
 let activeKeywords: readonly string[] = baseKeywords
 let activeStrongKeywords: readonly string[] = baseStrongKeywords
 let activePatterns: readonly RegExp[] = basePatterns
+let activeContactPatterns: readonly RegExp[] = baseContactPatterns
 let activeMatcher: CompiledKeywords = compileKeywords(activeKeywords, activeStrongKeywords)
 
 /** The general keyword list (weak terms; never flag alone). */
@@ -54,14 +56,17 @@ export const getAdKeywords = (): readonly string[] => activeKeywords
 export const getAdStrongKeywords = (): readonly string[] => activeStrongKeywords
 /** Precompiled keyword matcher the detector scans messages with. */
 export const getAdKeywordMatcher = (): CompiledKeywords => activeMatcher
-/** The patterns the detector should match against right now. */
+/** The *offer* patterns the detector hard-flags on (config `patterns`). */
 export const getAdPatterns = (): readonly RegExp[] => activePatterns
+/** The contact/hook patterns the detector length-gates (config `contactPatterns`). */
+export const getAdContactPatterns = (): readonly RegExp[] => activeContactPatterns
 
 /** Reset all lists to the config/ad.json baseline (used by tests). */
 export function resetAdRules(): void {
   activeKeywords = baseKeywords
   activeStrongKeywords = baseStrongKeywords
   activePatterns = basePatterns
+  activeContactPatterns = baseContactPatterns
   activeMatcher = compileKeywords(activeKeywords, activeStrongKeywords)
 }
 

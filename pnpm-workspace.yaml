@@ -1,2 +1,8 @@
 allowBuilds:
   esbuild: true
+
+# Force the axios that qq-official-bot pulls in to the patched major line.
+# qq-official-bot still pins axios 1.16.x, which has 1 high + 9 moderate
+# advisories (GHSA-gcfj-64vw-6mp9 and friends); 1.18.0 fixed them all.
+overrides:
+  axios: ^1.18.0

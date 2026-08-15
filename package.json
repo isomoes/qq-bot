@@ -15,6 +15,7 @@
     "build": "tsc",
     "start": "node --disable-warning=ExperimentalWarning dist/index.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "ad-test": "tsx scripts/ad-test.ts",
     "test": "node --import tsx --test \"test/**/*.test.ts\""
   },
   "dependencies": {

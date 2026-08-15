@@ -22,6 +22,7 @@ yarn-error.log*
 # Runtime / cache
 .cache/
 tmp/
+*.tmp
 
 # News command SQLite database (and WAL/SHM sidecars)
 data/

@@ -2,7 +2,11 @@
 // subscriptions), with a bundled fallback. The daily summary job calls this
 // once per run so the feed set tracks the OPML without a redeploy.
 
+import { readBodyText } from '../read-body'
+
 const OPML_FETCH_TIMEOUT_MS = 15_000
+/** Cap on the OPML body; a legit file is a few KB, so 5 MB is generous. */
+const OPML_MAX_BYTES = 5 * 1024 * 1024
 
 /** Minimal logger shape (satisfied by qq-official-bot's bot.logger). */
 export interface FeedListLogger {
@@ -73,7 +77,7 @@ export async function resolveFeeds(
       signal: AbortSignal.timeout(OPML_FETCH_TIMEOUT_MS),
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const urls = parseOpml(await res.text())
+    const urls = parseOpml(await readBodyText(res, OPML_MAX_BYTES))
     if (urls.length === 0) throw new Error('no feeds parsed from OPML')
     logger.info(`[news] loaded ${urls.length} feeds from OPML ${target}`)
     return urls

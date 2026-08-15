@@ -18,6 +18,7 @@ describe('parseAdConfig', () => {
         weakDiminish: 2,
         suspiciousUrlLr: 12,
         suspiciousTldLr: 5,
+        pitchLr: 35,
         minKeywordHits: 3,
         safeUrlDomains: ['jd.com', 'bilibili.com'],
         suspiciousTlds: ['.top', '.xyz'],
@@ -44,6 +45,7 @@ describe('parseAdConfig', () => {
     assert.equal(cfg.settings.bayes.weakDiminish, 2)
     assert.equal(cfg.settings.bayes.suspiciousUrlLr, 12)
     assert.equal(cfg.settings.bayes.suspiciousTldLr, 5)
+    assert.equal(cfg.settings.bayes.pitchLr, 35)
     assert.deepEqual(cfg.settings.safeUrlDomains, ['jd.com', 'bilibili.com'])
     assert.deepEqual(cfg.settings.suspiciousTlds, ['top', 'xyz'])
     assert.equal(cfg.settings.keywordLrs.get('贷款'), 80)

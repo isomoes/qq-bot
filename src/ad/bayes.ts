@@ -38,7 +38,11 @@
  *    the reference length of everyday chat, not a cliff), but the term is
  *    capped at `maxLengthLr` so no amount of length can flag by itself. A long
  *    message with one stray keyword — a member writing a long post — stays
- *    under the threshold.
+ *    under the threshold. The short-message dampening of keyword evidence
+ *    (ramping from `shortKeywordFactor` up to `chatLength` via
+ *    `shortRampPower`, superlinear) mirrors this: very short messages are
+ *    nearly powerless, because an ad is a structured pitch — hook + contact +
+ *    call-to-action — that cannot fit in four characters.
  * 5. Suspicious URLs are ad evidence. Ads almost always carry a link to a
  *    domain that is neither an official site nor a major platform; a URL on
  *    the `safeUrlDomains` whitelist (jd.com, bilibili.com, …) is normal
@@ -71,8 +75,15 @@ export interface AdBayesParams {
   /** Cap on the length-evidence term (log-odds). Kept modest so length alone
    *  can never push a message over the threshold. */
   maxLengthLr: number
-  /** Keyword-evidence multiplier at length 0, ramping to 1 at chatLength. */
+  /** Keyword-evidence multiplier at length 0, ramping to 1 at chatLength. The
+   *  ramp is superlinear (see `shortRampPower`), so very short messages are
+   *  strongly suppressed: "加我私聊" is a private-chat invitation, not an ad —
+   *  a real ad needs enough text to carry hook + contact + call-to-action. */
   shortKeywordFactor: number
+  /** Exponent of the short-message dampening ramp: 1 = linear, 2 = quadratic,
+   *  … — higher values suppress short messages harder. The scale always
+   *  reaches 1 at `chatLength`; only shorter messages are shaped. */
+  shortRampPower: number
   /** Repetition discount: a keyword occurring count times weighs
    *  repeatDiminish^(count-1) of a single occurrence (0..1]. */
   repeatDiminish: number
@@ -85,6 +96,41 @@ export interface AdBayesParams {
   /** Extra likelihood ratio when such a URL also sits on a spam-prone TLD
    *  (see `suspiciousTlds` in settings.ts) — a small additional doubt. */
   suspiciousTldLr: number
+  /** Soft evidence from a single contact pattern (微信/加V/QQ…) matched inside a
+   *  long message. Short messages and 2+ contact patterns hard-flag via the
+   *  pattern path instead (see detector.ts); a lone pattern in a long post is
+   *  just a hint that a real pitch may be present. */
+  contactLr: number
+  /** Likelihood ratio of a concrete promo/coupon/invite code (优惠码 AIPRO100).
+   *  The hardest structural ad signal — an explicit offer, often the only
+   *  proof needed. */
+  codeLr: number
+  /** Likelihood ratio of an explicit price-promo structure (立减500 / 满100减50
+   *  / 打7折 / 原价2999). */
+  priceLr: number
+  /** Likelihood ratio of an enrollment funnel (报名链接 / 开课 / 训练营). */
+  registerLr: number
+  /** Likelihood ratio of a paid-service pitch (出租 / 代充 / 按小时计费 + 联系客服). */
+  serviceLr: number
+  /** Likelihood ratio of a call-to-action phrase (想上车 / 有需要联系 / 欢迎扩散). */
+  ctaLr: number
+  /** Likelihood ratio of a pitch+contact structure (团购/优惠券/兼职/出售 …
+   *  adjacent to 联系/加我/私聊). The demoted promo/urgency words are weak on
+   *  their own; paired with a hook they become the ad's call to action, and the
+   *  structure earns as much as a strong keyword. */
+  pitchLr: number
+  /** Conversational dampening (0..1] applied to the soft keyword + contact
+   *  evidence when the message reads as a question ("有没有…？"). A question is
+   *  how a member actually asks the group, not how spam is written. */
+  questionFactor: number
+  /** Conversational dampening (0..1] applied to the soft keyword + contact
+   *  evidence when the message is a reply/quote of an earlier message in the
+   *  group — replying usually means continuing a discussion, not pitching. */
+  replyFactor: number
+  /** Conversational dampening (0..1] applied to the soft keyword + contact
+   *  evidence when the message asks for help / partnership (找合伙人, 组队,
+   *  内推, 求推荐…) — collaboration is how a tech group actually talks. */
+  collabFactor: number
 }
 
 export const DEFAULT_AD_BAYES: AdBayesParams = {
@@ -95,11 +141,22 @@ export const DEFAULT_AD_BAYES: AdBayesParams = {
   lengthLr: 0.35,
   chatLength: 10,
   maxLengthLr: 0.5,
-  shortKeywordFactor: 0.5,
+  shortKeywordFactor: 0.3,
+  shortRampPower: 2,
   repeatDiminish: 0.7,
   weakDiminish: 1.5,
   suspiciousUrlLr: 8,
   suspiciousTldLr: 2,
+  contactLr: 4,
+  codeLr: 30,
+  priceLr: 10,
+  registerLr: 6,
+  serviceLr: 8,
+  ctaLr: 5,
+  pitchLr: 40,
+  questionFactor: 0.55,
+  replyFactor: 0.6,
+  collabFactor: 0.7,
 }
 
 /** One distinct keyword's evidence contribution. */
@@ -110,6 +167,19 @@ export interface AdHit {
   count: number
   /** Per-keyword likelihood-ratio override from config/ad.json, if any. */
   lr?: number
+}
+
+/**
+ * Keyword-evidence multiplier for a message of `length` chars: 1 at
+ * `chatLength` and above, and a superlinear ramp down to `shortKeywordFactor`
+ * at length 0. Very short messages therefore keep almost none of their
+ * keyword evidence — a 4-char "加我私聊" is a private-chat invitation, not a
+ * structured ad. Shared by adLogOdds() and the analysis/test tool.
+ */
+export function adShortScale(length: number, params: AdBayesParams): number {
+  if (length >= params.chatLength) return 1
+  const t = length / params.chatLength
+  return params.shortKeywordFactor + (1 - params.shortKeywordFactor) * Math.pow(t, params.shortRampPower)
 }
 
 /**
@@ -158,11 +228,7 @@ export function adLogOdds(
   }
 
   if (known) {
-    const shortScale =
-      length < params.chatLength
-        ? params.shortKeywordFactor + (1 - params.shortKeywordFactor) * (length / params.chatLength)
-        : 1
-    evidence *= shortScale
+    evidence *= adShortScale(length, params)
     evidence += Math.min(params.maxLengthLr, params.lengthLr * Math.log(1 + length / params.chatLength))
   }
 

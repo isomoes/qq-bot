@@ -6,6 +6,6 @@
  */
 
 export { AntiAd } from './moderator'
-export { detectAd, type AdMatch } from './detector'
-export { getAdKeywords, getAdPatterns, startAdRulesRefresh } from './rules'
+export { detectAd, analyzeAd, type AdMatch, type AdAnalysis, type AdKeywordDetail, type AdContext } from './detector'
+export { getAdKeywords, getAdContactPatterns, getAdPatterns, startAdRulesRefresh } from './rules'
 export { getAdConfig, getAdSettings, type AdSettings, type LoadedAdConfig } from './settings'

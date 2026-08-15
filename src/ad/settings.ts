@@ -15,7 +15,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { DEFAULT_AD_BAYES, type AdBayesParams } from './bayes'
 import { BUILTIN_AD_KEYWORDS, BUILTIN_STRONG_AD_KEYWORDS, parseKeywordList } from './keywords'
-import { BUILTIN_AD_PATTERNS, parsePatternList } from './patterns'
+import { BUILTIN_AD_PATTERNS, BUILTIN_CONTACT_AD_PATTERNS, parsePatternList } from './patterns'
 import { DEFAULT_SAFE_URL_DOMAINS, DEFAULT_SUSPICIOUS_TLDS } from './urls'
 
 /** Combined tunable settings the detector/moderator read on every message. */
@@ -39,6 +39,7 @@ export interface LoadedAdConfig {
   keywords: string[]
   strongKeywords: string[]
   patterns: RegExp[]
+  contactPatterns: RegExp[]
   settings: AdSettings
   /** `file` when config/ad.json was read, `defaults` when it fell back. */
   source: 'file' | 'defaults'
@@ -72,6 +73,7 @@ export function parseAdConfig(body: string): LoadedAdConfig {
   const keywords: string[] = [...BUILTIN_AD_KEYWORDS]
   const strongKeywords: string[] = [...BUILTIN_STRONG_AD_KEYWORDS]
   const patterns: RegExp[] = [...BUILTIN_AD_PATTERNS]
+  const contactPatterns: RegExp[] = [...BUILTIN_CONTACT_AD_PATTERNS]
   const settings: AdSettings = {
     minKeywordHits: 2,
     bayes: { ...DEFAULT_AD_BAYES },
@@ -86,11 +88,11 @@ export function parseAdConfig(body: string): LoadedAdConfig {
     data = JSON.parse(body)
   } catch (err) {
     notes.push(`invalid JSON (${err instanceof Error ? err.message : String(err)}); using defaults`)
-    return { keywords, strongKeywords, patterns, settings, source: 'defaults', notes }
+    return { keywords, strongKeywords, patterns, contactPatterns, settings, source: 'defaults', notes }
   }
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     notes.push('config root must be a JSON object; using defaults')
-    return { keywords, strongKeywords, patterns, settings, source: 'defaults', notes }
+    return { keywords, strongKeywords, patterns, contactPatterns, settings, source: 'defaults', notes }
   }
   const obj = data as Record<string, unknown>
 
@@ -127,6 +129,16 @@ export function parseAdConfig(body: string): LoadedAdConfig {
       patterns.push(...parsed.items)
       for (const s of parsed.skipped) notes.push(`pattern skipped: ${s}`)
     } else notes.push('patterns: must be an array of strings; using defaults')
+  }
+
+  const rawContactPatterns = obj.contactPatterns
+  if (rawContactPatterns !== undefined) {
+    if (Array.isArray(rawContactPatterns) && rawContactPatterns.every((v) => typeof v === 'string')) {
+      const parsed = parsePatternList(rawContactPatterns.join('\n'))
+      contactPatterns.length = 0
+      contactPatterns.push(...parsed.items)
+      for (const s of parsed.skipped) notes.push(`contactPattern skipped: ${s}`)
+    } else notes.push('contactPatterns: must be an array of strings; using defaults')
   }
 
   // Probability params: each is independently validated, dropping bad values.
@@ -189,6 +201,11 @@ export function parseAdConfig(body: string): LoadedAdConfig {
     notes.push(`shortKeywordFactor: ${shortFactor} must be in (0..1]; keeping default`)
   else if (shortFactor !== undefined) settings.bayes.shortKeywordFactor = shortFactor
 
+  const shortPower = num('shortRampPower')
+  if (shortPower !== undefined && shortPower <= 0)
+    notes.push(`shortRampPower: ${shortPower} must be > 0; keeping default`)
+  else if (shortPower !== undefined) settings.bayes.shortRampPower = shortPower
+
   const repeatDiminish = num('repeatDiminish')
   if (repeatDiminish !== undefined && (repeatDiminish <= 0 || repeatDiminish > 1))
     notes.push(`repeatDiminish: ${repeatDiminish} must be in (0..1]; keeping default`)
@@ -208,6 +225,30 @@ export function parseAdConfig(body: string): LoadedAdConfig {
   if (tldLr !== undefined && tldLr < LR_MIN)
     notes.push(`suspiciousTldLr: ${tldLr} < ${LR_MIN}; keeping default`)
   else if (tldLr !== undefined) settings.bayes.suspiciousTldLr = tldLr
+
+  // Structural-feature likelihood ratios (>= LR_MIN) and conversational
+  // dampening factors (0..1). All optional; bad values keep the defaults.
+  const lrParam = (name: keyof AdBayesParams): void => {
+    const v = num(String(name))
+    if (v !== undefined && v < LR_MIN) notes.push(`${String(name)}: ${v} < ${LR_MIN}; keeping default`)
+    else if (v !== undefined) settings.bayes[name] = v as never
+  }
+  lrParam('contactLr')
+  lrParam('codeLr')
+  lrParam('priceLr')
+  lrParam('registerLr')
+  lrParam('serviceLr')
+  lrParam('ctaLr')
+  lrParam('pitchLr')
+
+  const factorParam = (name: 'questionFactor' | 'replyFactor' | 'collabFactor'): void => {
+    const v = num(name)
+    if (v !== undefined && (v <= 0 || v > 1)) notes.push(`${name}: ${v} must be in (0..1]; keeping default`)
+    else if (v !== undefined) settings.bayes[name] = v
+  }
+  factorParam('questionFactor')
+  factorParam('replyFactor')
+  factorParam('collabFactor')
 
   // Safe-URL whitelist: a present array replaces the bundled platform list.
   const rawSafe = obj.safeUrlDomains
@@ -232,7 +273,7 @@ export function parseAdConfig(body: string): LoadedAdConfig {
 
   settings.keywordLrs = keywordLrs
 
-  return { keywords, strongKeywords, patterns, settings, source: 'file', notes }
+  return { keywords, strongKeywords, patterns, contactPatterns, settings, source: 'file', notes }
 }
 
 /** Load config/ad.json if present; otherwise return the bundled defaults. */

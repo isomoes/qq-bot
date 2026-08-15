@@ -8,6 +8,8 @@
  * never drop below the bundled baselines.
  */
 
+import { readBodyText } from '../read-body'
+
 /** Minimal logger shape (satisfied by qq-official-bot's `bot.logger`). */
 export interface RemoteLogger {
   info(...args: unknown[]): void
@@ -53,7 +55,7 @@ export class RemoteFile {
       if (res.status === 304) return { status: 'unchanged', parsed: 0, skipped: 0 }
       if (!res.ok) return failed(`HTTP ${res.status}`)
 
-      const body = await res.text()
+      const body = await readBodyText(res)
       // Guard against an HTML/JSON error page served with 200 wiping the rules.
       // `[` is allowed — the rules file's section headers start with it.
       const head = body.replace(/^﻿/, '').trimStart()
